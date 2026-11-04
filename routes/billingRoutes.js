@@ -8,5 +8,6 @@ router.get('/:id', protect, billingController.getBillById);
 router.post('/', protect, billingController.createBill);
 router.post('/:id/payments', protect, billingController.addPayment);
 router.post('/:id/cancel', protect, billingController.cancelBill);
+router.delete('/:id', protect, billingController.deleteBill);
 
 module.exports = router;

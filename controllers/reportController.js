@@ -161,3 +161,19 @@ exports.deliverReport = async (req, res) => {
   }
 };
 
+
+exports.deleteReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await ReportStore.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Diagnostic report not found.' });
+    }
+    // Unlink any bill pointing to this report
+    await BillStore.updateMany({ report: id }, { $unset: { report: 1 } });
+
+    res.json({ success: true, message: 'Diagnostic report removed successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

@@ -381,3 +381,19 @@ exports.cancelBill = async (req, res) => {
   }
 };
 
+
+exports.deleteBill = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await BillStore.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Invoice not found.' });
+    }
+    // Unlink any diagnostic reports pointing to this bill
+    await ReportStore.updateMany({ bill: id }, { $unset: { bill: 1, invoiceNumber: 1 } });
+
+    res.json({ success: true, message: 'Invoice deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

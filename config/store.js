@@ -45,6 +45,14 @@ class StoreWrapper {
   async insertMany(docs) {
     return await this.mongooseModel.insertMany(docs);
   }
+
+  async updateMany(filter = {}, update = {}) {
+    return await this.mongooseModel.updateMany(filter, update);
+  }
+
+  async deleteMany(filter = {}) {
+    return await this.mongooseModel.deleteMany(filter);
+  }
 }
 
 module.exports = {
