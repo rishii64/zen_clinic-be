@@ -230,7 +230,7 @@ exports.createBill = async (req, res) => {
         phone: patient.phone,
         address: patient.address
       },
-      referringDoctor: referringDoctor || (clinicConfig && clinicConfig.doctorDetails && clinicConfig.doctorDetails.name) || 'Dr. R.K. MANDAL',
+      referringDoctor: referringDoctor || (clinicConfig && clinicConfig.doctorDetails && clinicConfig.doctorDetails.name) || 'Self',
       items: billItems,
       subtotal,
       discountType: discountType || 'flat',
@@ -278,13 +278,13 @@ exports.createBill = async (req, res) => {
         referringDoctor: newBill.referringDoctor,
         status: 'Sample Collected',
         technician: (clinicConfig && clinicConfig.technicianDetails) || {
-          name: 'Mr. R.K. Raut',
-          qualifications: '(BMLT) Jaipur'
+          name: '',
+          qualifications: ''
         },
         doctor: (clinicConfig && clinicConfig.doctorDetails) || {
-          name: 'Dr. R.K. MANDAL',
-          qualifications: 'M.B.B.S',
-          regNo: '18840'
+          name: '',
+          qualifications: '',
+          regNo: ''
         },
         tests: testsForReport,
         createdBy: req.user ? req.user._id : null

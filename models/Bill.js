@@ -37,7 +37,7 @@ const billSchema = new mongoose.Schema(
       phone: String,
       address: String
     },
-    referringDoctor: { type: String, default: 'Dr. R.K. MANDAL' },
+    referringDoctor: { type: String, default: 'Self' },
     items: [billItemSchema],
     subtotal: { type: Number, required: true },
     discountType: { type: String, enum: ['flat', 'percentage'], default: 'flat' },
@@ -71,4 +71,3 @@ const billSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Bill', billSchema);
-

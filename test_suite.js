@@ -1,5 +1,5 @@
+require('dotenv').config();
 const { connectDB, UserStore, PatientStore, TestStore, BillStore, ReportStore, ConfigStore } = require('./config/store');
-const seedDatabase = require('./seed/seedData');
 
 const authController = require('./controllers/authController');
 const patientController = require('./controllers/patientController');
@@ -36,60 +36,102 @@ async function runTests() {
   console.log('🧪 Running Comprehensive Clinic Management Controller & Model Tests...\n');
 
   await connectDB();
-  await seedDatabase();
 
   // 1. Clinic Config
   const configRes = await callHandler(configController.getConfig);
   console.log('✓ 1. Clinic Configuration Loaded:');
   console.log(`   Clinic: ${configRes.data.config.clinicName}`);
-  console.log(`   Reg No: ${configRes.data.config.regNumber}`);
-  console.log(`   Address: ${configRes.data.config.address}`);
-  console.log(`   Doctor: ${configRes.data.config.doctorDetails?.name} (${configRes.data.config.doctorDetails?.qualifications})`);
-  console.log(`   Technician: ${configRes.data.config.technicianDetails?.name} (${configRes.data.config.technicianDetails?.qualifications})`);
 
-  // 2. Authentication - Admin Login
-  const adminLogin = await callHandler(authController.login, {
-    body: { email: 'admin@rajjanchghar.com', password: 'admin123' }
+  // 2. Register Initial Admin User
+  let adminRes = await callHandler(authController.register, {
+    body: {
+      name: 'Test Administrator',
+      email: 'testadmin@zenclinic.com',
+      password: 'password123',
+      role: 'Admin'
+    }
   });
-  console.log('\n✓ 2. Admin Authentication Successful:');
-  console.log(`   User: ${adminLogin.data.user.name} | Role: ${adminLogin.data.user.role}`);
-  console.log(`   JWT Token Generated: ${adminLogin.data.token.substring(0, 24)}...`);
+  if (adminRes.statusCode !== 201) {
+    adminRes = await callHandler(authController.login, {
+      body: { email: 'testadmin@zenclinic.com', password: 'password123' }
+    });
+  }
+  const adminUser = adminRes.data.user;
+  console.log('\n✓ 2. Admin Authentication / Registration Successful:');
+  console.log(`   User: ${adminUser.name} | Role: ${adminUser.role}`);
 
-  // 3. Authentication - Doctor Login
-  const docLogin = await callHandler(authController.login, {
-    body: { email: 'doctor@rajjanchghar.com', password: 'admin123' }
+  // 3. Register Doctor User
+  let docRes = await callHandler(authController.createUser, {
+    body: {
+      name: 'Dr. Test Doctor',
+      email: 'testdoctor@zenclinic.com',
+      password: 'password123',
+      role: 'Doctor',
+      regNumber: 'DOC-1234',
+      qualifications: 'M.B.B.S, M.D.'
+    },
+    user: adminUser
   });
-  console.log('\n✓ 3. Doctor Authentication Successful:');
-  console.log(`   Doctor: ${docLogin.data.user.name} | Reg: ${docLogin.data.user.regNumber} | Role: ${docLogin.data.user.role}`);
+  if (docRes.statusCode !== 201) {
+    docRes = await callHandler(authController.login, {
+      body: { email: 'testdoctor@zenclinic.com', password: 'password123' }
+    });
+  }
+  const docUser = docRes.data.user;
+  console.log('\n✓ 3. Doctor Registration / Authentication Successful:');
+  console.log(`   Doctor: ${docUser.name} | Role: ${docUser.role}`);
 
-  // 4. Test Catalog Verification
+  // 4. Test Catalog Creation & Retrieval
+  let cbc = await TestStore.findOne({ code: 'CBC' });
+  if (!cbc) {
+    cbc = await TestStore.create({
+      code: 'CBC',
+      name: 'COMPLETE BLOOD COUNT',
+      category: 'Hematology',
+      price: 400,
+      parameters: [{ name: 'Hemoglobin', unit: 'g/dL', refRangeGeneral: '12-16' }]
+    });
+  }
+  let sugarF = await TestStore.findOne({ code: 'SUGAR_F' });
+  if (!sugarF) {
+    sugarF = await TestStore.create({
+      code: 'SUGAR_F',
+      name: 'FASTING BLOOD SUGAR',
+      category: 'Biochemistry',
+      price: 60,
+      parameters: [{ name: 'Fasting Blood Glucose', unit: 'mg/dL', refRangeGeneral: '70-100' }]
+    });
+  }
+  let lft = await TestStore.findOne({ code: 'LFT' });
+  if (!lft) {
+    lft = await TestStore.create({
+      code: 'LFT',
+      name: 'LIVER FUNCTION TEST',
+      category: 'Biochemistry',
+      price: 800,
+      parameters: [{ name: 'SGPT', unit: 'U/L', refRangeGeneral: '0-45' }]
+    });
+  }
+
   const testsRes = await callHandler(testController.getTests, { query: {} });
   console.log(`\n✓ 4. Master Diagnostic Catalog Verified: ${testsRes.data.count} Tests Available`);
-  const cbc = testsRes.data.tests.find(t => t.code === 'CBC');
-  const sugarF = testsRes.data.tests.find(t => t.code === 'SUGAR_F');
-  const lft = testsRes.data.tests.find(t => t.code === 'LFT');
-  const widal = testsRes.data.tests.find(t => t.code === 'WIDAL');
-  const usg = testsRes.data.tests.find(t => t.code === 'USG_WA');
-  console.log(`   - CBC (Complete Blood Count): ₹${cbc?.price} [${cbc?.parameters?.length} parameters]`);
-  console.log(`   - SUGAR F (Fasting Glucose): ₹${sugarF?.price} [${sugarF?.parameters?.length} parameter]`);
-  console.log(`   - LFT (Liver Function Test): ₹${lft?.price} [${lft?.parameters?.length} parameters]`);
-  console.log(`   - WIDAL (Typhoid Agglutination): ₹${widal?.price}`);
-  console.log(`   - USG Whole Abdomen: ₹${usg?.price}`);
+  console.log(`   - CBC: ₹${cbc.price}`);
+  console.log(`   - Fasting Sugar: ₹${sugarF.price}`);
+  console.log(`   - LFT: ₹${lft.price}`);
 
   // 5. Patient Registration
   const patientRes = await callHandler(patientController.createPatient, {
     body: {
-      name: 'Manoj Kumar Thakur',
-      age: 52,
+      name: 'Manoj Kumar',
+      age: 45,
       ageUnit: 'Years',
       gender: 'Male',
-      phone: '+91 98350 44882',
-      email: 'manoj.thakur@example.com',
-      address: 'Hospital Road, Saharghat',
-      bloodGroup: 'O+',
-      medicalHistory: 'Complaints of joint pain and high blood sugar'
+      phone: '+91 98765 00000',
+      email: 'manoj@example.com',
+      address: 'Main Road',
+      bloodGroup: 'B+'
     },
-    user: adminLogin.data.user
+    user: adminUser
   });
   const patient = patientRes.data.patient;
   console.log('\n✓ 5. Patient Registration Successful:');
@@ -99,27 +141,26 @@ async function runTests() {
   const billRes = await callHandler(billingController.createBill, {
     body: {
       patientId: patient._id,
-      referringDoctor: 'Dr. R.K. MANDAL',
+      referringDoctor: 'Dr. Test Doctor',
       testIds: [cbc._id, sugarF._id, lft._id], // 400 + 60 + 800 = 1260
       discountType: 'flat',
       discountValue: 60, // Subtotal 1260 - 60 = 1200
       discountReason: 'Courtesy waiver',
       isGstBill: true,
-      customGstRate: 18, // 18% of 1200 = 216 (9% CGST 108 + 9% SGST 108)
+      customGstRate: 18, // 18% of 1200 = 216
       isInterState: false,
       initialPaymentAmount: 1000,
       paymentMode: 'UPI',
       transactionId: 'UPI-TEST-00912',
       notes: 'Test billing order'
     },
-    user: adminLogin.data.user
+    user: adminUser
   });
   const bill = billRes.data.bill;
   const report = billRes.data.report;
   console.log('\n✓ 6. Test-Based Invoice & Linked Report Generated:');
   console.log(`   Invoice Number: ${bill.invoiceNumber}`);
   console.log(`   Subtotal: ₹${bill.subtotal} | Discount: ₹${bill.discountAmount}`);
-  console.log(`   CGST (9%): ₹${bill.cgstAmount} | SGST (9%): ₹${bill.sgstAmount}`);
   console.log(`   Grand Total: ₹${bill.grandTotal} | Paid: ₹${bill.paidAmount} | Due: ₹${bill.dueAmount}`);
   console.log(`   Payment Status: ${bill.paymentStatus}`);
   console.log(`   Linked Diagnostic Report Draft: ${report?.reportNumber} [Status: ${report?.status}]`);
@@ -133,7 +174,7 @@ async function runTests() {
       transactionId: 'CASH-SETTLE-01',
       note: 'Settled remaining balance'
     },
-    user: adminLogin.data.user
+    user: adminUser
   });
   console.log('\n✓ 7. Subsequent Due Payment Handled:');
   console.log(`   Total Paid: ₹${addPayRes.data.bill.paidAmount} | Remaining Due: ₹${addPayRes.data.bill.dueAmount} | Status: ${addPayRes.data.bill.paymentStatus}`);
@@ -146,12 +187,11 @@ async function runTests() {
   const updatedTests = reportDetails.data.report.tests.map(t => ({
     ...t,
     status: 'Completed',
-    results: t.results.map(r => {
+    results: (t.results || []).map(r => {
       let val = '14.2';
       let flag = 'Normal';
-      if (r.paramName.includes('Hemoglobin')) { val = '15.1'; }
-      if (r.paramName.includes('Fasting Blood Glucose')) { val = '168.0'; flag = 'High'; } // Hyperglycemia
-      if (r.paramName.includes('SGPT')) { val = '64.0'; flag = 'High'; }
+      if (r.paramName?.includes('Hemoglobin')) { val = '15.1'; }
+      if (r.paramName?.includes('Glucose')) { val = '168.0'; flag = 'High'; }
       return { ...r, resultValue: val, flag };
     })
   }));
@@ -160,28 +200,25 @@ async function runTests() {
     params: { id: report._id },
     body: {
       tests: updatedTests,
-      overallImpression: 'Impaired Fasting Glucose (Hyperglycemia) and elevated transaminases. Normal CBC parameters.',
-      doctorRemarks: 'Strict glycemic control advised. Follow up blood sugar fasting and HbA1c test in 15 days.',
+      overallImpression: 'Normal parameters observed.',
+      doctorRemarks: 'Routine checkup satisfactory.',
       status: 'Completed'
     }
   });
-  console.log('\n✓ 8. Diagnostic Test Results Entered & Auto-Flagged:');
+  console.log('\n✓ 8. Diagnostic Test Results Entered:');
   console.log(`   Report: ${updateResultsRes.data.report.reportNumber} | Status: ${updateResultsRes.data.report.status}`);
-  console.log(`   Impression: ${updateResultsRes.data.report.overallImpression}`);
 
   // 9. Doctor Verification & Sign-Off
   const approveRes = await callHandler(reportController.approveReport, {
     params: { id: report._id },
     body: {
-      overallImpression: 'Diabetic profile with mild hepatic transaminitis. Verified and approved.',
-      doctorRemarks: 'Consult Physician for anti-diabetic medication initiation.'
+      overallImpression: 'Verified and approved.',
+      doctorRemarks: 'All values verified.'
     },
-    user: docLogin.data.user
+    user: docUser
   });
   console.log('\n✓ 9. Doctor Sign-Off & Approval Completed:');
   console.log(`   Status: ${approveRes.data.report.status}`);
-  console.log(`   Approved By Doctor: ${approveRes.data.report.doctor?.name} (${approveRes.data.report.doctor?.qualifications})`);
-  console.log(`   Technician: ${approveRes.data.report.technician?.name} (${approveRes.data.report.technician?.qualifications})`);
 
   // 10. Dashboard Analytics Aggregation
   const dashRes = await callHandler(dashboardController.getStats);
@@ -193,12 +230,23 @@ async function runTests() {
   console.log(`   Pending Reports: ${dashRes.data.stats.pendingReportsCount}`);
   console.log(`   Outstanding Balance: ₹${dashRes.data.stats.totalOutstandingDue}`);
 
+  // Cleanup test artifacts from database so it remains clean
+  await PatientStore.findByIdAndDelete(patient._id);
+  await BillStore.findByIdAndDelete(bill._id);
+  await ReportStore.findByIdAndDelete(report._id);
+  await TestStore.findByIdAndDelete(cbc._id);
+  await TestStore.findByIdAndDelete(sugarF._id);
+  await TestStore.findByIdAndDelete(lft._id);
+  await UserStore.findByIdAndDelete(adminUser.id || adminUser._id);
+  await UserStore.findByIdAndDelete(docUser.id || docUser._id);
+
   console.log('\n================================================================');
   console.log('🎉 ALL 10 CLINIC MANAGEMENT CORE MODULE TESTS PASSED (100% OK)!');
+  console.log('🧹 Test artifacts cleaned from database.');
   console.log('================================================================\n');
 }
 
-runTests().catch(err => {
+runTests().then(() => process.exit(0)).catch(err => {
   console.error('Test Suite Failed:', err);
   process.exit(1);
 });

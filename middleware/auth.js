@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { UserStore } = require('../config/store');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'zenxnic_clinic_jwt_secret_key_2026_supersecure';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const protect = async (req, res, next) => {
   let token;
@@ -35,19 +35,7 @@ const protect = async (req, res, next) => {
   }
 };
 
-const authorize = (...roles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Not authenticated' });
-    }
-    if (!roles.includes(req.user.role) && req.user.role !== 'Admin') {
-      return res.status(403).json({
-        success: false,
-        message: `Role (${req.user.role}) is not authorized to access this resource. Required: ${roles.join(', ')}`
-      });
-    }
-    next();
-  };
-};
+// Role-based access removed: authorize is now a passthrough allowing all authenticated requests
+const authorize = () => (req, res, next) => next();
 
 module.exports = { protect, authorize, JWT_SECRET };

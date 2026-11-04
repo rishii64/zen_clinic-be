@@ -2,8 +2,8 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { connectDB } = require('./config/store');
-const seedDatabase = require('./seed/seedData');
+const connectDB = require('./config/db');
+
 
 dotenv.config();
 
@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
-    clinic: 'RAJ JANCH GHAR',
+    clinic: 'Zen Clinic',
     service: 'Diagnostic Report & Billing Engine',
     timestamp: new Date().toISOString()
   });
@@ -65,7 +65,7 @@ app.use((err, req, res, next) => {
 async function startServer() {
   try {
     await connectDB();
-    await seedDatabase();
+
 
     const server = app.listen(PORT, () => {
       console.log(`🚀 App & API active on http://localhost:${PORT}`);

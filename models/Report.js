@@ -47,7 +47,7 @@ const reportSchema = new mongoose.Schema(
     sampleCollectedAt: { type: Date, default: Date.now },
     sampleReceivedAt: { type: Date, default: Date.now },
     reportedAt: { type: Date, default: null },
-    referringDoctor: { type: String, default: 'Dr. R.K. MANDAL' },
+    referringDoctor: { type: String, default: 'Self' },
     tests: [testReportItemSchema],
     status: {
       type: String,
@@ -55,15 +55,15 @@ const reportSchema = new mongoose.Schema(
       default: 'Sample Collected'
     },
     technician: {
-      name: { type: String, default: 'Mr. R.K. Raut' },
-      qualifications: { type: String, default: '(BMLT) Jaipur' },
-      regNo: { type: String, default: 'BMLT-JP-402' },
+      name: { type: String, default: '' },
+      qualifications: { type: String, default: '' },
+      regNo: { type: String, default: '' },
       signatureUrl: { type: String, default: '' }
     },
     doctor: {
-      name: { type: String, default: 'Dr. R.K. MANDAL' },
+      name: { type: String, default: '' },
       qualifications: { type: String, default: 'M.B.B.S' },
-      regNo: { type: String, default: '18840' },
+      regNo: { type: String, default: '' },
       designation: { type: String, default: 'Consultant Pathologist' },
       signatureUrl: { type: String, default: '' }
     },
@@ -77,4 +77,3 @@ const reportSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Report', reportSchema);
-
