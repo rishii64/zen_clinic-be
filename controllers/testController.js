@@ -1,8 +1,52 @@
-const { TestStore } = require('../config/store');
+const { TestStore, MongooseModels } = require('../config/store');
+const tariffMaster = require('../data/tariffMaster');
+
+/**
+ * Synchronize all 74 master tests from the official clinic tariff sheet
+ */
+const syncTariffInternal = async () => {
+  const TestModel = MongooseModels.Test;
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const t of tariffMaster) {
+    const existing = await TestModel.findOne({ code: t.code });
+    if (!existing) {
+      await TestModel.create({ ...t, isActive: true });
+      createdCount++;
+    } else {
+      await TestModel.updateOne(
+        { code: t.code },
+        {
+          $set: {
+            name: t.name,
+            category: t.category,
+            sampleType: t.sampleType,
+            price: t.price,
+            turnaroundTime: t.turnaroundTime,
+            testType: t.testType,
+            parameters: t.parameters,
+            isActive: true
+          }
+        }
+      );
+      updatedCount++;
+    }
+  }
+
+  return { total: tariffMaster.length, createdCount, updatedCount };
+};
 
 exports.getTests = async (req, res) => {
   try {
     const { category, search, activeOnly } = req.query;
+
+    // Auto-seed if database has 0 tests
+    const totalCount = await TestStore.countDocuments();
+    if (totalCount === 0) {
+      await syncTariffInternal();
+    }
+
     let filter = {};
 
     if (activeOnly !== 'false') {
@@ -22,6 +66,22 @@ exports.getTests = async (req, res) => {
 
     const tests = await TestStore.find(filter, { name: 1 });
     res.json({ success: true, count: tests.length, tests });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.syncMasterTariff = async (req, res) => {
+  try {
+    const result = await syncTariffInternal();
+    const tests = await TestStore.find({}, { name: 1 });
+    res.json({
+      success: true,
+      message: `Synchronized ${result.total} master tests from clinic tariff rate sheet.`,
+      result,
+      count: tests.length,
+      tests
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -98,4 +158,3 @@ exports.deleteTest = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-

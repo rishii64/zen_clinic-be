@@ -129,10 +129,10 @@ exports.approveReport = async (req, res) => {
       overallImpression: overallImpression !== undefined ? overallImpression : report.overallImpression,
       doctorRemarks: doctorRemarks !== undefined ? doctorRemarks : report.doctorRemarks,
       doctor: {
-        name: doctorUser ? doctorUser.name : (report.doctor && report.doctor.name) || 'Dr. R.K. MANDAL',
-        qualifications: doctorUser ? (doctorUser.qualifications || 'M.B.B.S') : (report.doctor && report.doctor.qualifications) || 'M.B.B.S',
-        regNo: doctorUser ? (doctorUser.regNumber || '18840') : (report.doctor && report.doctor.regNo) || '18840',
-        designation: doctorUser ? (doctorUser.designation || 'Consultant Pathologist') : (report.doctor && report.doctor.designation) || 'Consultant Pathologist'
+        name: doctorUser ? doctorUser.name : (report.doctor && report.doctor.name) || '',
+        qualifications: doctorUser ? (doctorUser.qualifications || '') : (report.doctor && report.doctor.qualifications) || '',
+        regNo: doctorUser ? (doctorUser.regNumber || '') : (report.doctor && report.doctor.regNo) || '',
+        designation: doctorUser ? (doctorUser.designation || '') : (report.doctor && report.doctor.designation) || ''
       }
     });
 
@@ -161,3 +161,19 @@ exports.deliverReport = async (req, res) => {
   }
 };
 
+
+exports.deleteReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await ReportStore.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Diagnostic report not found.' });
+    }
+    // Unlink any bill pointing to this report
+    await BillStore.updateMany({ report: id }, { $unset: { report: 1 } });
+
+    res.json({ success: true, message: 'Diagnostic report removed successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
