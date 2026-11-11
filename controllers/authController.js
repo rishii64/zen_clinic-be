@@ -1,7 +1,15 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { UserStore } = require('../config/store');
 const { JWT_SECRET } = require('../middleware/auth');
+const { sendPasswordResetOtp } = require('../services/emailService');
+
+const RESET_OTP_EXPIRY_MS = 10 * 60 * 1000;
+const RESET_OTP_COOLDOWN_MS = 60 * 1000;
+const RESET_OTP_MAX_ATTEMPTS = 5;
+
+const hashResetOtp = (otp) => crypto.createHmac('sha256', JWT_SECRET).update(otp).digest('hex');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -46,6 +54,132 @@ exports.login = async (req, res) => {
       token,
       user: sanitizeUser(user)
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.requestPasswordReset = async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Please provide an email address' });
+    }
+
+    const user = await UserStore.findOne({ email, isActive: { $ne: false } });
+    if (user) {
+      const requestedAt = user.passwordResetOtpRequestedAt
+        ? new Date(user.passwordResetOtpRequestedAt).getTime()
+        : 0;
+      if (Date.now() - requestedAt < RESET_OTP_COOLDOWN_MS) {
+        return res.json({
+          success: true,
+          message: 'If an active account exists for this email, a verification code has been sent.'
+        });
+      }
+
+      const otp = crypto.randomInt(100000, 1000000).toString();
+      const otpHash = hashResetOtp(otp);
+      await UserStore.findByIdAndUpdate(user._id, {
+        passwordResetOtpHash: otpHash,
+        passwordResetOtpExpiresAt: new Date(Date.now() + RESET_OTP_EXPIRY_MS),
+        passwordResetOtpAttempts: 0,
+        passwordResetOtpRequestedAt: new Date()
+      });
+
+      try {
+        await sendPasswordResetOtp(email, otp);
+      } catch (error) {
+        await UserStore.findByIdAndUpdate(user._id, {
+          $unset: {
+            passwordResetOtpHash: 1,
+            passwordResetOtpExpiresAt: 1,
+            passwordResetOtpAttempts: 1,
+            passwordResetOtpRequestedAt: 1
+          }
+        });
+        throw error;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'If an active account exists for this email, a verification code has been sent.'
+    });
+  } catch (err) {
+    console.error('Password reset email failed:', err);
+    res.status(503).json({ success: false, message: 'Unable to send a verification code right now. Please try again later.' });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!email || !/^\d{6}$/.test(otp) || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide a valid email, 6-digit code and a password of at least 8 characters.'
+      });
+    }
+
+    const user = await UserStore.findOne({ email, isActive: { $ne: false } });
+    if (!user || !user.passwordResetOtpHash || !user.passwordResetOtpExpiresAt) {
+      return res.status(400).json({ success: false, message: 'The verification code is invalid or expired.' });
+    }
+
+    if (new Date(user.passwordResetOtpExpiresAt).getTime() <= Date.now()) {
+      await UserStore.findByIdAndUpdate(user._id, {
+        $unset: {
+          passwordResetOtpHash: 1,
+          passwordResetOtpExpiresAt: 1,
+          passwordResetOtpAttempts: 1,
+          passwordResetOtpRequestedAt: 1
+        }
+      });
+      return res.status(400).json({ success: false, message: 'The verification code is invalid or expired.' });
+    }
+
+    const submittedHash = hashResetOtp(otp);
+    const storedHash = Buffer.from(user.passwordResetOtpHash, 'hex');
+    const isValidOtp = storedHash.length === Buffer.from(submittedHash, 'hex').length
+      && crypto.timingSafeEqual(storedHash, Buffer.from(submittedHash, 'hex'));
+
+    if (!isValidOtp) {
+      const attempts = (user.passwordResetOtpAttempts || 0) + 1;
+      const update = attempts >= RESET_OTP_MAX_ATTEMPTS
+        ? {
+            $unset: {
+              passwordResetOtpHash: 1,
+              passwordResetOtpExpiresAt: 1,
+              passwordResetOtpAttempts: 1,
+              passwordResetOtpRequestedAt: 1
+            }
+          }
+        : { passwordResetOtpAttempts: attempts };
+      await UserStore.findByIdAndUpdate(user._id, update);
+      return res.status(400).json({
+        success: false,
+        message: attempts >= RESET_OTP_MAX_ATTEMPTS
+          ? 'Too many incorrect codes. Request a new verification code.'
+          : 'The verification code is invalid or expired.'
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await UserStore.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      $unset: {
+        passwordResetOtpHash: 1,
+        passwordResetOtpExpiresAt: 1,
+        passwordResetOtpAttempts: 1,
+        passwordResetOtpRequestedAt: 1
+      }
+    });
+
+    res.json({ success: true, message: 'Password reset successfully. You can now sign in.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
