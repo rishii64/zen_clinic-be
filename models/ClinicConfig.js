@@ -51,7 +51,9 @@ const clinicConfigSchema = new mongoose.Schema(
     },
     watermarkText: { type: String, default: 'SAHARGHAT' },
     showWatermark: { type: Boolean, default: true },
-    showQrCode: { type: Boolean, default: true }
+    showQrCode: { type: Boolean, default: true },
+    letterheadTopHeight: { type: Number, default: 40 },
+    letterheadBottomHeight: { type: Number, default: 16 }
   },
   { timestamps: true }
 );
