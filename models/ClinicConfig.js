@@ -7,7 +7,7 @@ const clinicConfigSchema = new mongoose.Schema(
     regNumber: { type: String, default: 'Reg No - 430/2022' },
     address: { type: String, default: 'MAIN ROAD NETA JI CHOWK SAHARGHAT' },
     phone: { type: String, default: '' },
-    email: { type: String, default: '' },
+    email: { type: String, default: 'rajjanchghar@gmail.com' },
     website: { type: String, default: '' },
     gstin: { type: String, default: '' },
     state: { type: String, default: 'Bihar' },
